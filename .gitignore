@@ -1,0 +1,28 @@
+# Terraform state and local configuration
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Credentials and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials
+kubeconfig
+kubeconfig.*
+
+# Logs and temporary files
+*.log
+logs/
+.DS_Store
+*.bak
+*.tmp

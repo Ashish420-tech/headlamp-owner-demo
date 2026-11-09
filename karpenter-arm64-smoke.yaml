@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: arm64-provisioning-test
+  namespace: karpenter-smoke
+  labels:
+    app: karpenter-smoke
+    test: arm64-provisioning
+spec:
+  nodeSelector:
+    kubernetes.io/arch: arm64
+    karpenter.sh/nodepool: arm64-pool
+  containers:
+    - name: smoke-test
+      image: public.ecr.aws/docker/library/busybox:1.36
+      command:
+        - /bin/sh
+        - -c
+        - "echo 'Karpenter ARM64 smoke test started'; sleep 3600"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 250m
+          memory: 256Mi
+  restartPolicy: Never

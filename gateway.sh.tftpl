@@ -1,0 +1,98 @@
+#!/bin/bash
+set -Eeuo pipefail
+exec > >(tee -a /var/log/headlamp-gateway-setup.log) 2>&1
+
+REGION="${region}"
+CLUSTER="${cluster_name}"
+USERNAME="${username}"
+PASSWORD="${password}"
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y curl jq ca-certificates gnupg unzip snapd
+
+# AWS CLI
+if ! command -v aws >/dev/null 2>&1; then
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+  unzip -q /tmp/awscliv2.zip -d /tmp
+  /tmp/aws/install
+fi
+
+# kubectl
+curl -fsSLo /usr/local/bin/kubectl \
+  "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+chmod +x /usr/local/bin/kubectl
+
+# SSM agent
+snap install amazon-ssm-agent --classic || true
+systemctl enable --now snap.amazon-ssm-agent.amazon-ssm-agent.service || true
+
+# Caddy
+install -d -m 0755 /etc/apt/keyrings
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+  | gpg --dearmor -o /etc/apt/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+  > /etc/apt/sources.list.d/caddy-stable.list
+apt-get update
+apt-get install -y caddy
+
+# Wait for AWS credentials and private EKS endpoint
+for i in $(seq 1 60); do
+  if aws sts get-caller-identity >/dev/null 2>&1; then break; fi
+  sleep 10
+done
+
+mkdir -p /home/ubuntu/.kube
+aws eks update-kubeconfig \
+  --region "$REGION" \
+  --name "$CLUSTER" \
+  --kubeconfig /home/ubuntu/.kube/config
+
+chown -R ubuntu:ubuntu /home/ubuntu/.kube
+chmod 600 /home/ubuntu/.kube/config
+
+# Dashboard hostname from Elastic IP
+PUBLIC_IP=$(curl -fsS https://checkip.amazonaws.com | tr -d '[:space:]')
+HOST="$${PUBLIC_IP}.nip.io"
+
+# Caddy basic authentication
+HASH=$(caddy hash-password --plaintext "$PASSWORD")
+
+cat > /etc/caddy/Caddyfile <<CADDY
+$${HOST} {
+  encode gzip
+  basic_auth {
+    $${USERNAME} $${HASH}
+  }
+  reverse_proxy 127.0.0.1:8080
+}
+CADDY
+
+# Persistent Headlamp tunnel
+cat > /etc/systemd/system/headlamp-tunnel.service <<SYSTEMD
+[Unit]
+Description=Headlamp Kubernetes port forward
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+Environment=AWS_REGION=$${REGION}
+Environment=KUBECONFIG=/home/ubuntu/.kube/config
+ExecStart=/usr/local/bin/kubectl port-forward --address 127.0.0.1 -n headlamp svc/headlamp 8080:80
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+SYSTEMD
+
+systemctl daemon-reload
+systemctl enable headlamp-tunnel
+systemctl restart headlamp-tunnel
+
+systemctl enable caddy
+systemctl restart caddy
+
+echo "Headlamp gateway bootstrap completed."

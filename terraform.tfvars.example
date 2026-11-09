@@ -1,0 +1,16 @@
+# AWS deployment configuration
+region       = "ap-south-1"
+
+# Existing EKS cluster
+cluster_name = "YOUR_EKS_CLUSTER_NAME"
+
+# Existing AWS networking resources
+vpc_id                    = "vpc-xxxxxxxxxxxxxxxxx"
+subnet_id                 = "subnet-xxxxxxxxxxxxxxxxx"
+cluster_security_group_id = "sg-xxxxxxxxxxxxxxxxx"
+
+# Headlamp dashboard authentication
+dashboard_username = "projectowner"
+
+# Set dashboard_password in your local terraform.tfvars.
+# Never commit the real password.
