@@ -1,0 +1,24 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: headlamp-token-manager
+  namespace: headlamp
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    resourceNames: ["headlamp-viewer"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: headlamp-token-manager-binding
+  namespace: headlamp
+subjects:
+  - kind: Group
+    name: headlamp-token-managers
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: headlamp-token-manager
+  apiGroup: rbac.authorization.k8s.io
